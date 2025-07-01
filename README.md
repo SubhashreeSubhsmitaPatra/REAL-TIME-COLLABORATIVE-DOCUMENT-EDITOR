@@ -137,3 +137,4 @@ By enabling frictionless real-time collaboration, CollabDoc exemplifies how mode
 
 *output*:-
 
+![Image](https://github.com/user-attachments/assets/3c778391-0cb3-4110-8c1e-c7038683730f)
