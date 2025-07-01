@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollabDoc - Real-time Collaborative Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .editor-content {
+            min-height: calc(100vh - 180px);
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 120px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .cursor-indicator {
+            position: absolute;
+            height: 20px;
+            width: 2px;
+            background-color: #3b82f6;
+            z-index: 10;
+        }
+        .user-cursor {
+            position: absolute;
+            padding: 2px 5px;
+            font-size: 12px;
+            border-radius: 4px;
+            color: white;
+            z-index: 10;
+        }
+        #editor {
+            position: relative;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                z-index: 50;
+                transition: transform 0.3s ease;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 40;
+                display: none;
+            }
+            .sidebar-overlay.open {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Mobile Sidebar Toggle -->
+    <div class="md:hidden fixed top-4 left-4 z-30">
+        <button id="sidebarToggle" class="p-2 rounded-md bg-white shadow-md">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+
+    <!-- Sidebar Overlay (Mobile) -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar w-64 bg-white border-r border-gray-200 h-screen fixed md:relative z-30">
+        <div class="p-4 border-b border-gray-200">
+            <h1 class="text-xl font-bold text-blue-600">CollabDoc</h1>
+        </div>
+        
+        <div class="p-4">
+            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md flex items-center justify-center mb-4">
+                <i class="fas fa-plus mr-2"></i> New Document
+            </button>
+            
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent Documents</h3>
+                <ul>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-file-alt text-gray-400 mr-2"></i>
+                        <span>Project Proposal</span>
+                    </li>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-file-alt text-gray-400 mr-2"></i>
+                        <span>Meeting Notes</span>
+                    </li>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-file-alt text-gray-400 mr-2"></i>
+                        <span>Product Roadmap</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Shared With Me</h3>
+                <ul>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-users text-gray-400 mr-2"></i>
+                        <span>Team Handbook</span>
+                    </li>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-users text-gray-400 mr-2"></i>
+                        <span>Marketing Plan</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Templates</h3>
+                <ul>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-clipboard text-gray-400 mr-2"></i>
+                        <span>Meeting Notes</span>
+                    </li>
+                    <li class="py-2 px-2 rounded hover:bg-gray-100 cursor-pointer flex items-center">
+                        <i class="fas fa-clipboard text-gray-400 mr-2"></i>
+                        <span>Project Brief</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="md:ml-64">
+        <!-- Top Navigation -->
+        <div class="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <h2 class="text-lg font-semibold">Untitled Document</h2>
+                <span class="ml-3 text-sm text-gray-500">Last saved just now</span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">JD</div>
+                    <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">AM</div>
+                    <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold">+2</div>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-share-alt"></i>
+                        <span class="tooltiptext">Share</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-history"></i>
+                        <span class="tooltiptext">Version History</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-ellipsis-v"></i>
+                        <span class="tooltiptext">More options</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Formatting Toolbar -->
+        <div class="bg-white border-b border-gray-200 p-2 overflow-x-auto">
+            <div class="flex items-center space-x-1 min-w-max">
+                <div class="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-paragraph"></i>
+                        <span class="tooltiptext">Text</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-heading"></i>
+                        <span class="tooltiptext">Heading 1</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-heading" style="font-size: 0.8em;"></i>
+                        <span class="tooltiptext">Heading 2</span>
+                    </button>
+                </div>
+                
+                <div class="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-bold"></i>
+                        <span class="tooltiptext">Bold</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-italic"></i>
+                        <span class="tooltiptext">Italic</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-underline"></i>
+                        <span class="tooltiptext">Underline</span>
+                    </button>
+                </div>
+                
+                <div class="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-list-ul"></i>
+                        <span class="tooltiptext">Bullet List</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-list-ol"></i>
+                        <span class="tooltiptext">Numbered List</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-quote-right"></i>
+                        <span class="tooltiptext">Quote</span>
+                    </button>
+                </div>
+                
+                <div class="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-link"></i>
+                        <span class="tooltiptext">Link</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-image"></i>
+                        <span class="tooltiptext">Image</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-code"></i>
+                        <span class="tooltiptext">Code</span>
+                    </button>
+                </div>
+                
+                <div class="flex items-center space-x-1">
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-comment"></i>
+                        <span class="tooltiptext">Comment</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 tooltip">
+                        <i class="fas fa-palette"></i>
+                        <span class="tooltiptext">Color</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Document Editor -->
+        <div class="p-6 max-w-4xl mx-auto">
+            <div id="editor" class="editor-content bg-white rounded-lg shadow-sm p-8">
+                <div id="content" contenteditable="true" class="focus:outline-none min-h-[500px]">
+                    <h1 class="text-3xl font-bold mb-6">Untitled Document</h1>
+                    <p class="mb-4">Start typing here...</p>
+                    <p class="mb-4">This is a collaborative document editor. Changes you make will appear in real-time for all collaborators.</p>
+                    <ul class="list-disc pl-6 mb-4">
+                        <li>Try bold, italics, and other formatting</li>
+                        <li>Create lists and headings</li>
+                        <li>Invite others to collaborate</li>
+                    </ul>
+                </div>
+                
+                <!-- Cursor indicators will be added here dynamically -->
+            </div>
+            
+            <!-- Status Bar -->
+            <div class="mt-4 text-sm text-gray-500 flex justify-between items-center">
+                <div>
+                    <span id="wordCount">0 words</span>
+                    <span class="mx-2">•</span>
+                    <span id="characterCount">0 characters</span>
+                </div>
+                <div>
+                    <button class="text-blue-600 hover:text-blue-800">Export as PDF</button>
+                    <span class="mx-2">•</span>
+                    <button class="text-blue-600 hover:text-blue-800">Print</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar (Comments) - Hidden on mobile -->
+    <div class="hidden lg:block fixed right-0 top-0 h-screen w-64 bg-white border-l border-gray-200 p-4 overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold">Comments</h3>
+            <button class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="mb-4">
+            <textarea class="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="Add a comment..."></textarea>
+            <div class="mt-2 flex justify-end">
+                <button class="bg-blue-600 text-white px-3 py-1 rounded-md text-sm">Comment</button>
+            </div>
+        </div>
+        
+        <div class="space-y-4">
+            <div class="border-b border-gray-200 pb-4">
+                <div class="flex items-start mb-2">
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold mr-2">JD</div>
+                    <div>
+                        <div class="text-sm font-semibold">John Doe</div>
+                        <div class="text-xs text-gray-500">2 minutes ago</div>
+                    </div>
+                </div>
+                <p class="text-sm mt-1">Can we add more details about the project timeline here?</p>
+                <div class="mt-2 flex space-x-2">
+                    <button class="text-xs text-blue-600 hover:text-blue-800">Resolve</button>
+                    <button class="text-xs text-gray-500 hover:text-gray-700">Reply</button>
+                </div>
+            </div>
+            
+            <div class="border-b border-gray-200 pb-4">
+                <div class="flex items-start mb-2">
+                    <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold mr-2">AM</div>
+                    <div>
+                        <div class="text-sm font-semibold">Alice Miller</div>
+                        <div class="text-xs text-gray-500">10 minutes ago</div>
+                    </div>
+                </div>
+                <p class="text-sm mt-1">I've updated the budget numbers based on our latest estimates.</p>
+                <div class="mt-2 flex space-x-2">
+                    <button class="text-xs text-blue-600 hover:text-blue-800">Resolve</button>
+                    <button class="text-xs text-gray-500 hover:text-gray-700">Reply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mobile sidebar toggle
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            sidebarOverlay.classList.toggle('open');
+        });
+        
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            sidebarOverlay.classList.remove('open');
+        });
+        
+        // Word and character count
+        const content = document.getElementById('content');
+        const wordCount = document.getElementById('wordCount');
+        const characterCount = document.getElementById('characterCount');
+        
+        function updateCounts() {
+            const text = content.innerText;
+            const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+            const characters = text.length;
+            
+            wordCount.textContent = `${words} ${words === 1 ? 'word' : 'words'}`;
+            characterCount.textContent = `${characters} characters`;
+        }
+        
+        content.addEventListener('input', updateCounts);
+        updateCounts();
+        
+        // Simulate real-time collaboration with cursor indicators
+        const editor = document.getElementById('editor');
+        const collaborators = [
+            { id: 1, name: 'John Doe', color: 'bg-blue-500', position: 120 },
+            { id: 2, name: 'Alice Miller', color: 'bg-green-500', position: 350 }
+        ];
+        
+        function renderCollaboratorCursors() {
+            // Clear existing cursors
+            document.querySelectorAll('.cursor-indicator, .user-cursor').forEach(el => el.remove());
+            
+            // Add new cursors
+            collaborators.forEach(collab => {
+                // Create cursor indicator
+                const cursor = document.createElement('div');
+                cursor.className = `cursor-indicator ${collab.color}`;
+                cursor.style.top = `${collab.position}px`;
+                cursor.style.left = '20px';
+                cursor.dataset.userId = collab.id;
+                
+                // Create user label
+                const label = document.createElement('div');
+                label.className = `user-cursor ${collab.color}`;
+                label.style.top = `${collab.position - 25}px`;
+                label.style.left = '25px';
+                label.textContent = collab.name;
+                label.dataset.userId = collab.id;
+                
+                editor.appendChild(cursor);
+                editor.appendChild(label);
+            });
+        }
+        
+        // Initial render
+        renderCollaboratorCursors();
+        
+        // Simulate cursor movement
+        setInterval(() => {
+            collaborators.forEach(collab => {
+                // Random movement within bounds
+                const movement = Math.floor(Math.random() * 60) - 30;
+                collab.position = Math.max(50, Math.min(800, collab.position + movement));
+            });
+            renderCollaboratorCursors();
+        }, 2000);
+        
+        // Simulate typing indicator
+        setInterval(() => {
+            const typingIndicator = document.createElement('span');
+            typingIndicator.className = 'text-blue-500 animate-pulse';
+            typingIndicator.textContent = '...';
+            
+            const randomUser = collaborators[Math.floor(Math.random() * collaborators.length)];
+            const userLabel = document.querySelector(`.user-cursor[data-user-id="${randomUser.id}"]`);
+            
+            if (userLabel) {
+                userLabel.appendChild(typingIndicator);
+                setTimeout(() => {
+                    typingIndicator.remove();
+                }, 1000);
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
